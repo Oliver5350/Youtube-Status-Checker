@@ -1,5 +1,7 @@
 import os
-from flask import Flask, request, render_template, send_file
+import time
+import uuid
+from flask import Flask, request, render_template, send_file, redirect, url_for
 from werkzeug.utils import secure_filename
 import pandas as pd
 from youtubecheck import process_youtube_links
@@ -14,6 +16,9 @@ app.config["OUTPUT_FOLDER"] = OUTPUT_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
+# Log storage (could later be replaced with DB)
+file_records = []
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     error_message = None
@@ -27,17 +32,27 @@ def index():
             error_message = "No file selected!"
             return render_template("index.html", error=error_message)
 
+        # Generate unique names
         filename = secure_filename(file.filename)
-        filepath = os.path.join(app.config["UPLOAD_FOLDER"], filename)
+        unique_name = f"{int(time.time())}_{uuid.uuid4().hex}_{filename}"
+        filepath = os.path.join(app.config["UPLOAD_FOLDER"], unique_name)
         file.save(filepath)
 
         try:
             # Process links
             result_df = process_youtube_links(filepath)
 
-            # Save output
-            output_path = os.path.join(app.config["OUTPUT_FOLDER"], "result.xlsx")
+            # Save unique output
+            output_name = f"result_{unique_name}"
+            output_path = os.path.join(app.config["OUTPUT_FOLDER"], output_name)
             result_df.to_excel(output_path, index=False, engine="openpyxl")
+
+            # Log it
+            file_records.append({
+                "upload": unique_name,
+                "output": output_name,
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+            })
 
             return send_file(output_path, as_attachment=True)
 
@@ -47,6 +62,22 @@ def index():
             return render_template("index.html", error=error_message)
 
     return render_template("index.html", error=error_message)
+
+
+@app.route("/dashboard")
+def dashboard():
+    return render_template("dashboard.html", records=file_records)
+
+
+@app.route("/download/<path:filename>")
+def download(filename):
+    # Check both folders
+    if os.path.exists(os.path.join(UPLOAD_FOLDER, filename)):
+        return send_file(os.path.join(UPLOAD_FOLDER, filename), as_attachment=True)
+    elif os.path.exists(os.path.join(OUTPUT_FOLDER, filename)):
+        return send_file(os.path.join(OUTPUT_FOLDER, filename), as_attachment=True)
+    else:
+        return "File not found!", 404
 
 
 if __name__ == "__main__":
