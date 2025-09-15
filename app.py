@@ -18,6 +18,11 @@ current_result = None
 @app.route("/")
 def index():
     return render_template("index.html")
+    
+@app.route("/progress")
+def progress():
+    with progress_lock:
+        return jsonify(progress_data or {"total": 0, "done": 0, "error": None})
 
 @app.route("/start", methods=["POST"])
 def start_process():
