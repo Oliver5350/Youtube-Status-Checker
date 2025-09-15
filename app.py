@@ -15,14 +15,11 @@ os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 current_result = None
 
+
 @app.route("/")
 def index():
     return render_template("index.html")
-    
-@app.route("/progress")
-def progress():
-    with progress_lock:
-        return jsonify(progress_data or {"total": 0, "done": 0, "error": None})
+
 
 @app.route("/start", methods=["POST"])
 def start_process():
@@ -52,10 +49,12 @@ def start_process():
     Thread(target=background_job, daemon=True).start()
     return "Processing started", 202
 
+
 @app.route("/progress")
 def progress():
     with progress_lock:
-        return jsonify(progress_data)
+        return jsonify(progress_data or {"total": 0, "done": 0, "error": None})
+
 
 @app.route("/download")
 def download_result():
@@ -63,5 +62,7 @@ def download_result():
         return send_file(current_result, as_attachment=True)
     return "No result available yet", 404
 
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    port = int(os.environ.get("PORT", 5000))  # ✅ use Render’s PORT
+    app.run(host="0.0.0.0", port=port)
