@@ -30,3 +30,30 @@ def process_youtube_links_with_progress(file_path, sheet_name=0, status_column="
 
     try:
         df = pd.read_excel(file_path, sheet_name=sheet_name, engine="openpyxl")
+    except Exception as e:
+        with progress_lock:
+            progress_data["error"] = f"❌ Could not read Excel: {e}"
+        return None
+
+    # Auto-detect first column for URLs
+    url_column = df.columns[0]
+
+    if status_column not in df.columns:
+        df[status_column] = ""
+
+    total_links = len(df)
+
+    with progress_lock:
+        progress_data = {"total": total_links, "done": 0, "error": None}
+
+    for index, row in df.iterrows():
+        url = str(row[url_column])
+        status = check_youtube_status(url)
+        df.at[index, status_column] = status
+
+        with progress_lock:
+            progress_data["done"] += 1
+
+        time.sleep(0.3)  # tweak if needed
+
+    return df
